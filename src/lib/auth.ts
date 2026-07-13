@@ -13,6 +13,7 @@ export interface UserSession {
   name: string;
   role: string;
   department: string;
+  position: string;
 }
 
 export async function encrypt(payload: UserSession) {

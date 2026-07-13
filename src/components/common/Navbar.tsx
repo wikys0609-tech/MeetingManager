@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, CalendarRange, CheckSquare, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, CalendarRange, CheckSquare, LogOut, User, Settings } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -41,6 +41,7 @@ export default function Navbar() {
     { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
     { name: '회의 관리', href: '/meetings', icon: CalendarRange },
     { name: '할 일 목록', href: '/tasks', icon: CheckSquare },
+    { name: '설정', href: '/settings', icon: Settings },
   ];
 
   return (
@@ -82,7 +83,7 @@ export default function Navbar() {
         {session && (
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-card-border text-xs text-slate-300">
             <User size={12} className="text-indigo-400" />
-            <span className="font-semibold text-slate-200">{session.name}</span>
+            <span className="font-semibold text-slate-200">{session.name} {session.position}</span>
             <span className="text-slate-500">|</span>
             <span className="text-slate-400">{session.department}</span>
             <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-[10px] text-indigo-300 font-bold border border-indigo-500/10">

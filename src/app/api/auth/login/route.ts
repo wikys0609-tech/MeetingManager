@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       name: user.name,
       role: user.role,
       department: user.department,
+      position: user.position,
     };
 
     await setSession(sessionUser);
