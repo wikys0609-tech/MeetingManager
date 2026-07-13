@@ -1,0 +1,361 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          String   // admin, general, requester
+  department    String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  createdMeetings        Meeting[]            @relation("MeetingCreator")
+  meetingParticipants   MeetingParticipant[]
+  agendaRequests         AgendaRequest[]      @relation("Requester")
+  writtenNotes           MeetingNote[]        @relation("NoteAuthor")
+  assignedTasks          Task[]               @relation("TaskAssignee")
+  requestedTasks         Task[]               @relation("TaskRequester")
+  writtenComments        TaskComment[]        @relation("CommentAuthor")
+  taskConfirmations      TaskConfirmation[]
+  opinions               PreMeetingOpinion[]  @relation("OpinionAuthor")
+  requestedReviews       ReviewRequest[]      @relation("ReviewRequester")
+  assignedReviews        ReviewRequest[]      @relation("ReviewReviewer")
+}
+
+model Meeting {
+  id                       String   @id @default(uuid())
+  title                    String
+  objective                String?
+  scheduledAt              DateTime
+  location                 String?
+  onlineUrl                String?
+  status                   String   // draft, pre_summary_processing, pre_review, pre_confirmed, meeting_completed, transcription_processing, post_review, post_confirmed, closed
+  creatorId                String
+  parentMeetingId          String?
+  confirmedPreSummaryId    String?
+  confirmedPostSummaryId   String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  deletedAt                DateTime?
+
+  // Relations
+  creator                  User                 @relation("MeetingCreator", fields: [creatorId], references: [id])
+  participants             MeetingParticipant[]
+  agendas                  Agenda[]
+  attachments              Attachment[]
+  opinions                 PreMeetingOpinion[]
+  agendaRequests           AgendaRequest[]
+  notes                    MeetingNote[]
+  recordings               Recording[]
+  moments                  ImportantMoment[]
+  summaries                AiSummary[]
+  decisions                Decision[]
+  tasks                    Task[]
+  reviews                  ReviewRequest[]
+}
+
+model MeetingParticipant {
+  id              String   @id @default(uuid())
+  meetingId       String
+  userId          String
+  participantRole String   // e.g., attendee, facilitator, writer
+  attendanceStatus String   // invited, attending, not_attending, undecided
+  createdAt       DateTime @default(now())
+
+  // Relations
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+}
+
+model Agenda {
+  id               String   @id @default(uuid())
+  meetingId        String
+  title            String
+  description      String?
+  orderIndex       Int
+  decisionRequired Boolean  @default(false)
+  sourceType       String?  // e.g., carry_over, new
+  sourceMeetingId  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  meeting          Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  opinions         PreMeetingOpinion[]
+  decisions        Decision[]
+}
+
+model Attachment {
+  id                    String   @id @default(uuid())
+  meetingId             String?
+  taskId                String?
+  uploadedBy            String
+  filename              String
+  storagePath           String
+  mimeType              String
+  sizeBytes             Int
+  textExtractionStatus  String   // pending, completed, failed
+  createdAt             DateTime @default(now())
+  deletedAt             DateTime?
+
+  // Relations
+  meeting               Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  task                  Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model PreMeetingOpinion {
+  id         String   @id @default(uuid())
+  meetingId  String
+  agendaId   String
+  authorId   String
+  content    String
+  visibility String   // public, private, team
+  status     String   // unreviewed, reflected, answered, pending
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  agenda     Agenda   @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  author     User     @relation("OpinionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model AgendaRequest {
+  id             String   @id @default(uuid())
+  meetingId      String
+  requesterId    String
+  title          String
+  description    String?
+  status         String   // pending, approved, carry_over, rejected
+  resolutionNote String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  meeting        Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  requester      User     @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+}
+
+model MeetingNote {
+  id          String   @id @default(uuid())
+  meetingId   String
+  authorId    String
+  agendaId    String?
+  content     String
+  noteType    String   // general, decision_candidate, task_candidate, follow_up, parking_lot
+  isImportant Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  author      User     @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Recording {
+  id              String            @id @default(uuid())
+  meetingId       String
+  uploadedBy      String
+  storagePath     String
+  filename        String
+  durationSeconds Int?
+  language        String?
+  status          String            // uploaded, queued, processing, completed, failed
+  createdAt       DateTime          @default(now())
+  processedAt     DateTime?
+  deletedAt       DateTime?
+
+  // Relations
+  meeting         Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  segments        TranscriptSegment[]
+  moments         ImportantMoment[]
+}
+
+model TranscriptSegment {
+  id             String   @id @default(uuid())
+  recordingId    String
+  speakerLabel   String
+  speakerUserId  String?
+  startSeconds   Float
+  endSeconds     Float
+  content        String
+  confidence     Float
+  isEdited       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  recording      Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+}
+
+model ImportantMoment {
+  id           String   @id @default(uuid())
+  meetingId    String
+  recordingId  String?
+  createdBy    String
+  startSeconds Float?
+  endSeconds   Float?
+  momentType   String   // decision, action, follow_up, conflict, key_info
+  note         String?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  recording    Recording? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
+}
+
+model AiSummary {
+  id             String   @id @default(uuid())
+  meetingId      String
+  summaryType    String   // pre_meeting, post_meeting
+  version        Int      @default(1)
+  sourceSnapshot String   // JSON string of data used to generate
+  resultJson     String   // JSON string of generated summary
+  status         String   // generated, reviewing, confirmed, superseded
+  createdBy      String
+  createdAt      DateTime @default(now())
+  confirmedAt    DateTime?
+  confirmedBy    String?
+
+  // Relations
+  meeting        Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Decision {
+  id              String   @id @default(uuid())
+  meetingId       String
+  agendaId        String?
+  content         String
+  status          String   // decided, pending, revisit, cancelled
+  sourceType      String   // transcript, note, manual
+  sourceReference String?
+  isConfirmed     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  agenda          Agenda?  @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  tasks           Task[]
+}
+
+model Task {
+  id                 String   @id @default(uuid())
+  title              String
+  description        String?
+  assigneeId         String?
+  requesterId        String?
+  dueDate            DateTime?
+  status             String   // todo, in_progress, completed, pending
+  priority           String   // low, medium, high
+  sourceType         String   // ai_summary, manual, general, request, review
+  meetingId          String?
+  decisionId         String?
+  confirmationStatus String   @default("not_required") // not_required, pending, confirmed, change_requested
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  completedAt        DateTime?
+
+  // Relations
+  assignee           User?             @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  requester          User?             @relation("TaskRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  meeting            Meeting?          @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  decision           Decision?         @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+  comments           TaskComment[]
+  confirmations      TaskConfirmation[]
+  attachments        Attachment[]
+  reviews            ReviewRequest[]
+}
+
+model TaskComment {
+  id          String   @id @default(uuid())
+  taskId      String
+  authorId    String
+  content     String
+  commentType String   // general, status_update, query, completed_report
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User     @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model TaskConfirmation {
+  id           String   @id @default(uuid())
+  taskId       String
+  userId       String
+  responseType String   // confirm, change_assignee, edit_content, adjust_due_date
+  comment      String?
+  status       String   // pending, resolved
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+
+  // Relations
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FollowUpLink {
+  id               String   @id @default(uuid())
+  sourceMeetingId  String
+  targetMeetingId  String
+  linkedItemType   String   // task, agenda, decision, note
+  linkedItemId     String
+  createdAt        DateTime @default(now())
+}
+
+model ReviewRequest {
+  id               String   @id @default(uuid())
+  title            String
+  description      String?
+  requesterId      String
+  reviewerId       String
+  status           String   // pending, approved, rejected, change_requested
+  relatedTaskId    String?
+  relatedMeetingId String?
+  createdAt        DateTime @default(now())
+  resolvedAt       DateTime?
+
+  // Relations
+  requester        User     @relation("ReviewRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer         User     @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  task             Task?    @relation(fields: [relatedTaskId], references: [id], onDelete: SetNull)
+  meeting          Meeting? @relation(fields: [relatedMeetingId], references: [id], onDelete: SetNull)
+}
+
+model SharedResource {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  resourceType String   // file, link
+  url          String?
+  attachmentId String?
+  sharedBy     String
+  visibility   String   // public, team
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Poll {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  pollType    String   // descriptive, yes_no, single_choice, multiple_choice
+  creatorId   String
+  status      String   // active, closed
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+}
