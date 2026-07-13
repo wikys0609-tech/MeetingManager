@@ -6,7 +6,7 @@ import Navbar from '@/components/common/Navbar';
 import { 
   Calendar, Clock, MapPin, Video, User, Users, 
   Sparkles, CheckCircle, Upload, Plus, Edit2, 
-  Trash2, MessageSquare, Play, AlertTriangle, ArrowRight, Loader2
+  Trash2, MessageSquare, Play, PlayCircle, AlertTriangle, ArrowRight, Loader2
 } from 'lucide-react';
 
 export default function MeetingDetailPage() {
