@@ -6,6 +6,72 @@ import {
   CheckSquare, Calendar, User, MessageSquare, 
   Plus, AlertCircle, CheckCircle, RefreshCw, Send, Loader2
 } from 'lucide-react';
+import EmptyState from '@/components/common/EmptyState';
+import { getTaskStatusDetail, getTaskPriorityDetail } from '@/lib/taskStatus';
+
+const getDDayInfo = (dueDateStr: string | null, isCompleted: boolean) => {
+  if (!dueDateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(dueDateStr);
+  dueDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = dueDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (!isCompleted && diffDays < 0) {
+    return {
+      label: '지연',
+      colorClass: 'text-rose-400 bg-rose-500/10 border border-rose-500/20 font-bold px-1.5 py-0.5 rounded text-[9px]',
+      isOverdue: true,
+      isUrgent: false
+    };
+  }
+  if (!isCompleted && diffDays === 0) {
+    return {
+      label: '오늘 마감',
+      colorClass: 'text-amber-400 bg-amber-500/10 border border-amber-500/20 font-bold px-1.5 py-0.5 rounded text-[9px]',
+      isOverdue: false,
+      isUrgent: true
+    };
+  }
+  if (!isCompleted && diffDays === 1) {
+    return {
+      label: 'D-1',
+      colorClass: 'text-amber-400 bg-amber-500/10 border border-amber-500/20 font-bold px-1.5 py-0.5 rounded text-[9px]',
+      isOverdue: false,
+      isUrgent: true
+    };
+  }
+  return {
+    label: `D-${diffDays}`,
+    colorClass: 'text-slate-400',
+    isOverdue: false,
+    isUrgent: false
+  };
+};
+
+const getTaskSortWeight = (t: any) => {
+  if (t.status === 'completed') return 9999;
+  
+  if (t.dueDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(t.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return -2000 + diffDays; // Overdue tasks first, ordered by oldest overdue first
+    }
+    if (diffDays === 0 || diffDays === 1) {
+      return -1000 + diffDays; // Today/tomorrow due tasks next
+    }
+    return diffDays; // Rest ascending by due date
+  }
+  return 5000; // Uncompleted tasks without due date
+};
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([]);
@@ -14,7 +80,7 @@ export default function TasksPage() {
   const [users, setUsers] = useState<any[]>([]);
 
   // Task Filter Tabs
-  const [activeTab, setActiveTab] = useState<'all' | 'todo' | 'completed' | 'confirm_needed'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'todo' | 'in_progress' | 'completed' | 'confirm_needed'>('all');
 
   // Manual Task Form Fields
   const [title, setTitle] = useState('');
@@ -145,18 +211,22 @@ export default function TasksPage() {
 
   // Filter Tasks
   const filteredTasks = tasks.filter((t) => {
-    // If active tab is confirm_needed, show tasks where confirmation is pending and user is the assignee
     if (activeTab === 'confirm_needed') {
       return t.confirmationStatus === 'pending' && t.assigneeId === currentUser?.id;
     }
     if (activeTab === 'todo') {
-      return t.status === 'todo' || t.status === 'in_progress';
+      return t.status === 'todo';
+    }
+    if (activeTab === 'in_progress') {
+      return t.status === 'in_progress';
     }
     if (activeTab === 'completed') {
       return t.status === 'completed';
     }
     return true; // all
   });
+
+  const sortedTasks = [...filteredTasks].sort((a, b) => getTaskSortWeight(a) - getTaskSortWeight(b));
 
   const selectedTaskDetails = tasks.find((t) => t.id === activeTaskId);
 
@@ -199,7 +269,15 @@ export default function TasksPage() {
                 activeTab === 'todo' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              진행 중 ({tasks.filter((t) => t.status !== 'completed').length})
+              미착수 ({tasks.filter((t) => t.status === 'todo').length})
+            </button>
+            <button
+              onClick={() => setActiveTab('in_progress')}
+              className={`px-4 py-2 border-b-2 font-semibold transition-all cursor-pointer ${
+                activeTab === 'in_progress' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              진행 중 ({tasks.filter((t) => t.status === 'in_progress').length})
             </button>
             <button
               onClick={() => setActiveTab('completed')}
@@ -225,12 +303,13 @@ export default function TasksPage() {
               <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4"></div>
               <span className="text-sm text-slate-400">업무 목록을 조회하는 중...</span>
             </div>
-          ) : filteredTasks.length > 0 ? (
+          ) : sortedTasks.length > 0 ? (
             <div className="space-y-3">
-              {filteredTasks.map((task) => {
+              {sortedTasks.map((task) => {
                 const isSelected = task.id === activeTaskId;
                 const isAssignee = task.assigneeId === currentUser?.id;
                 const showConfirmBox = task.confirmationStatus === 'pending' && isAssignee;
+                const prio = getTaskPriorityDetail(task.priority);
 
                 return (
                   <div
@@ -241,9 +320,9 @@ export default function TasksPage() {
                   >
                     <div className="space-y-1.5 flex-1 cursor-pointer" onClick={() => setActiveTaskId(task.id)}>
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${
-                          task.priority === 'high' ? 'bg-rose-500' : task.priority === 'medium' ? 'bg-amber-500' : 'bg-slate-500'
-                        }`}></span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${prio.bgClass}`}>
+                          {prio.label}
+                        </span>
                         <h3 className="text-sm font-bold text-white leading-relaxed">
                           {task.title}
                         </h3>
@@ -254,12 +333,20 @@ export default function TasksPage() {
                         <span className="px-2 py-0.5 rounded bg-white/5 border border-card-border">
                           경로: {task.sourceType === 'ai_summary' ? 'AI 요약 자동 추출' : '직접 등록'}
                         </span>
-                        {task.dueDate && (
-                          <span className="flex items-center gap-1">
-                            <Calendar size={10} />
-                            마감: {new Date(task.dueDate).toLocaleDateString('ko-KR')}
-                          </span>
-                        )}
+                        {task.dueDate && (() => {
+                          const dday = getDDayInfo(task.dueDate, task.status === 'completed');
+                          return (
+                            <span className="flex items-center gap-1.5">
+                              <Calendar size={10} />
+                              <span className={dday?.isOverdue ? 'text-rose-400 font-semibold' : dday?.isUrgent ? 'text-amber-400 font-semibold' : ''}>
+                                마감: {new Date(task.dueDate).toLocaleDateString('ko-KR')}
+                              </span>
+                              {dday && (dday.isOverdue || dday.isUrgent) && (
+                                <span className={dday.colorClass}>{dday.label}</span>
+                              )}
+                            </span>
+                          );
+                        })()}
                         {task.assignee && (
                           <span className="flex items-center gap-1">
                             <User size={10} />
@@ -303,14 +390,13 @@ export default function TasksPage() {
               })}
             </div>
           ) : (
-            <div className="glass-panel p-20 rounded-3xl border border-card-border text-center flex flex-col items-center justify-center">
-              <AlertCircle className="w-12 h-12 text-slate-600 mb-4" />
-              <h3 className="text-lg font-bold text-white mb-1">해당하는 업무가 없습니다.</h3>
-              <p className="text-slate-500 text-xs max-w-sm">
-                할 일을 수동으로 추가하거나 회의록 AI 확정 처리를 해보세요.
-              </p>
-            </div>
+            <EmptyState
+              title="해당하는 업무가 없습니다."
+              description="필터를 변경하거나 우측의 신규 업무 등록을 통해 할 일을 새로 추가해 보세요."
+              icon={CheckSquare}
+            />
           )}
+
 
         </div>
 

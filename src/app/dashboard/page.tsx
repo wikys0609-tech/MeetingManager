@@ -4,6 +4,72 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/common/Navbar';
 import { Calendar, AlertCircle, CheckCircle, ArrowRight, UserPlus, FileText, PlayCircle } from 'lucide-react';
+import EmptyState from '@/components/common/EmptyState';
+import { getTaskPriorityDetail } from '@/lib/taskStatus';
+
+const getDDayInfo = (dueDateStr: string | null, isCompleted: boolean) => {
+  if (!dueDateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(dueDateStr);
+  dueDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = dueDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (!isCompleted && diffDays < 0) {
+    return {
+      label: '지연',
+      colorClass: 'text-rose-400 bg-rose-500/10 border border-rose-500/20 font-bold px-1.5 py-0.5 rounded text-[9px]',
+      isOverdue: true,
+      isUrgent: false
+    };
+  }
+  if (!isCompleted && diffDays === 0) {
+    return {
+      label: '오늘 마감',
+      colorClass: 'text-amber-400 bg-amber-500/10 border border-amber-500/20 font-bold px-1.5 py-0.5 rounded text-[9px]',
+      isOverdue: false,
+      isUrgent: true
+    };
+  }
+  if (!isCompleted && diffDays === 1) {
+    return {
+      label: 'D-1',
+      colorClass: 'text-amber-400 bg-amber-500/10 border border-amber-500/20 font-bold px-1.5 py-0.5 rounded text-[9px]',
+      isOverdue: false,
+      isUrgent: true
+    };
+  }
+  return {
+    label: `D-${diffDays}`,
+    colorClass: 'text-slate-500',
+    isOverdue: false,
+    isUrgent: false
+  };
+};
+
+const getTaskSortWeight = (t: any) => {
+  if (t.status === 'completed') return 9999;
+  
+  if (t.dueDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(t.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return -2000 + diffDays;
+    }
+    if (diffDays === 0 || diffDays === 1) {
+      return -1000 + diffDays;
+    }
+    return diffDays;
+  }
+  return 5000;
+};
 
 export default function Dashboard() {
   const [meetings, setMeetings] = useState<any[]>([]);
@@ -63,7 +129,9 @@ export default function Dashboard() {
   );
 
   const recentMeetings = meetings.filter((m) => m.status === 'post_confirmed' || m.status === 'closed');
-  const todoTasks = tasks.filter((t) => t.status === 'todo' || t.status === 'in_progress');
+  const todoTasks = tasks
+    .filter((t) => t.status === 'todo' || t.status === 'in_progress')
+    .sort((a, b) => getTaskSortWeight(a) - getTaskSortWeight(b));
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
@@ -137,9 +205,13 @@ export default function Dashboard() {
                   </Link>
                 ))
               ) : (
-                <div className="glass-panel p-8 rounded-2xl border border-card-border text-center text-slate-500 text-sm">
-                  오늘 예정된 회의가 없습니다.
-                </div>
+                <EmptyState
+                  title="오늘 예정된 회의가 없습니다"
+                  description="새로운 기획 회의나 스프린트 미팅을 등록해 보세요."
+                  icon={Calendar}
+                  ctaText="+ 새 회의 등록"
+                  ctaLink="/meetings/new"
+                />
               )}
             </div>
           </div>
@@ -231,9 +303,13 @@ export default function Dashboard() {
                   );
                 })
               ) : (
-                <div className="glass-panel p-8 rounded-2xl border border-card-border text-center text-slate-500 text-sm">
-                  검토 대기중인 회의가 없습니다.
-                </div>
+                <EmptyState
+                  title="검토 대기중인 회의가 없습니다"
+                  description="AI 요약본 검토가 완료되었거나 새로 개설된 회의가 없습니다."
+                  icon={FileText}
+                  ctaText="회의 목록 보기"
+                  ctaLink="/meetings"
+                />
               )}
             </div>
           </div>
@@ -253,17 +329,36 @@ export default function Dashboard() {
                     className="glass-panel p-4 rounded-2xl border border-card-border flex items-start justify-between gap-3 group"
                   >
                     <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          task.priority === 'high' ? 'bg-rose-500 animate-pulse' : task.priority === 'medium' ? 'bg-amber-500' : 'bg-slate-500'
-                        }`}></span>
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const prio = getTaskPriorityDetail(task.priority);
+                          return (
+                            <span className={`px-1 py-0.2 rounded text-[8px] font-bold border ${prio.bgClass}`}>
+                              {prio.label}
+                            </span>
+                          );
+                        })()}
                         <h4 className="text-xs font-semibold text-slate-300 line-clamp-1">
                           {task.title}
                         </h4>
                       </div>
-                      <p className="text-[10px] text-slate-500 line-clamp-1">
-                        마감일: {task.dueDate ? new Date(task.dueDate).toLocaleDateString('ko-KR') : '미지정'}
-                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                        {task.dueDate ? (() => {
+                          const dday = getDDayInfo(task.dueDate, task.status === 'completed');
+                          return (
+                            <>
+                              <span className={dday?.isOverdue ? 'text-rose-400 font-semibold' : dday?.isUrgent ? 'text-amber-400 font-semibold' : ''}>
+                                마감일: {new Date(task.dueDate).toLocaleDateString('ko-KR')}
+                              </span>
+                              {dday && (dday.isOverdue || dday.isUrgent) && (
+                                <span className={dday.colorClass}>{dday.label}</span>
+                              )}
+                            </>
+                          );
+                        })() : (
+                          <span>마감일: 미지정</span>
+                        )}
+                      </div>
                     </div>
 
                     <Link
@@ -276,9 +371,13 @@ export default function Dashboard() {
                   </div>
                 ))
               ) : (
-                <div className="glass-panel p-8 rounded-2xl border border-card-border text-center text-slate-500 text-sm">
-                  진행 중인 할 일이 없습니다.
-                </div>
+                <EmptyState
+                  title="진행 중인 할 일이 없습니다"
+                  description="나에게 할당된 진행 중인 작업이 모두 완료되었습니다."
+                  icon={CheckCircle}
+                  ctaText="할 일 목록 보기"
+                  ctaLink="/tasks"
+                />
               )}
             </div>
           </div>

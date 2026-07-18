@@ -197,6 +197,7 @@ export default function SettingsPage() {
                             placeholder="username@meetinghub.local"
                             className="w-full pl-9 pr-3 py-2 rounded-xl glass-input text-xs text-white"
                             required
+                            autoComplete="off"
                           />
                         </div>
                       </div>
@@ -213,6 +214,7 @@ export default function SettingsPage() {
                             placeholder="비밀번호 설정"
                             className="w-full pl-9 pr-3 py-2 rounded-xl glass-input text-xs text-white"
                             required
+                            autoComplete="new-password"
                           />
                         </div>
                       </div>
