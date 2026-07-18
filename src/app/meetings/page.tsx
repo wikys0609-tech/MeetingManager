@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/common/Navbar';
 import { Calendar, Plus, ChevronRight, Clock, MapPin, Video, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 
 export default function MeetingsPage() {
+  const router = useRouter();
   const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,6 +20,17 @@ export default function MeetingsPage() {
       .catch((err) => console.error('Error fetching meetings:', err))
       .finally(() => setLoading(false));
   }, []);
+
+  const formatMeetingDate = (scheduledAtStr: string) => {
+    const date = new Date(scheduledAtStr);
+    const currentYear = new Date().getFullYear();
+    const meetingYear = date.getFullYear();
+    
+    if (meetingYear !== currentYear) {
+      return `${meetingYear}. ${date.getMonth() + 1}. ${date.getDate()}.`;
+    }
+    return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -90,11 +103,12 @@ export default function MeetingsPage() {
                   {meetings.map((meeting) => (
                     <tr
                       key={meeting.id}
-                      className="hover:bg-white/5 transition-all group"
+                      onClick={() => router.push(`/meetings/${meeting.id}`)}
+                      className="hover:bg-white/5 transition-all group cursor-pointer"
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-xs">
                         <div className="font-semibold text-slate-200">
-                          {new Date(meeting.scheduledAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                          {formatMeetingDate(meeting.scheduledAt)}
                         </div>
                         <div className="text-slate-500 flex items-center gap-1 mt-0.5">
                           <Clock size={12} />
@@ -146,13 +160,10 @@ export default function MeetingsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <Link
-                          href={`/meetings/${meeting.id}`}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
-                        >
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 group-hover:text-indigo-300 transition-colors">
                           보기
                           <ChevronRight size={14} />
-                        </Link>
+                        </span>
                       </td>
                     </tr>
                   ))}

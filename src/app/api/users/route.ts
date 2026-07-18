@@ -10,6 +10,8 @@ export async function GET() {
       return NextResponse.json({ error: '인증되지 않은 요청입니다.' }, { status: 401 });
     }
 
+    const isAdmin = session.role === 'admin';
+
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -18,8 +20,9 @@ export async function GET() {
         role: true,
         department: true,
         position: true,
+        isActive: true,
       },
-      where: {
+      where: isAdmin ? undefined : {
         isActive: true,
       },
       orderBy: {
@@ -40,7 +43,6 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    // Access control: Only admins can create users
     if (!session || session.role !== 'admin') {
       return NextResponse.json(
         { error: '사용자 등록은 관리자 권한이 필요합니다.' },
@@ -57,7 +59,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -69,10 +70,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user in database
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -90,6 +89,7 @@ export async function POST(req: NextRequest) {
         role: true,
         department: true,
         position: true,
+        isActive: true,
       },
     });
 
@@ -98,6 +98,60 @@ export async function POST(req: NextRequest) {
     console.error('Create user error:', error);
     return NextResponse.json(
       { error: '사용자를 등록하는 도중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json(
+        { error: '사용자 정보 변경은 관리자 권한이 필요합니다.' },
+        { status: 403 }
+      );
+    }
+
+    const { userId, password, name, role, department, position, isActive } = await req.json();
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: '변경할 사용자 ID가 필요합니다.' },
+        { status: 400 }
+      );
+    }
+
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (role !== undefined) updateData.role = role;
+    if (department !== undefined) updateData.department = department;
+    if (position !== undefined) updateData.position = position;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    if (password) {
+      updateData.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        department: true,
+        position: true,
+        isActive: true,
+      },
+    });
+
+    return NextResponse.json({ success: true, user: updatedUser });
+  } catch (error) {
+    console.error('Update user error:', error);
+    return NextResponse.json(
+      { error: '사용자 정보를 업데이트하는 도중 오류가 발생했습니다.' },
       { status: 500 }
     );
   }

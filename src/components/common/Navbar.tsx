@@ -9,6 +9,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
+  const [confirmNeededCount, setConfirmNeededCount] = useState<number>(0);
 
   useEffect(() => {
     // Fetch session details
@@ -19,6 +20,17 @@ export default function Navbar() {
       })
       .then((data) => {
         setSession(data.session);
+        if (data.session) {
+          fetch('/api/tasks')
+            .then((res) => res.json())
+            .then((taskData) => {
+              const pendingCount = (taskData.tasks || []).filter(
+                (t: any) => t.confirmationStatus === 'pending' && t.assigneeId === data.session.id
+              ).length;
+              setConfirmNeededCount(pendingCount);
+            })
+            .catch((err) => console.error('Error fetching task count:', err));
+        }
       })
       .catch(() => {
         // If not logged in, middleware handles redirect, but we can also route here
@@ -64,14 +76,19 @@ export default function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all relative ${
                   isActive
                     ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/20'
                     : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
                 }`}
               >
                 <Icon size={16} />
-                {item.name}
+                <span>{item.name}</span>
+                {item.name === '할 일 목록' && confirmNeededCount > 0 && (
+                  <span className="flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white leading-none border border-slate-950">
+                    {confirmNeededCount}
+                  </span>
+                )}
               </Link>
             );
           })}

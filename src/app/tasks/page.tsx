@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Navbar from '@/components/common/Navbar';
 import { 
   CheckSquare, Calendar, User, MessageSquare, 
@@ -330,9 +331,26 @@ export default function TasksPage() {
                       <p className="text-xs text-slate-400 line-clamp-1">{task.description}</p>
                       
                       <div className="flex flex-wrap gap-2 text-[10px] text-slate-500 pt-1">
-                        <span className="px-2 py-0.5 rounded bg-white/5 border border-card-border">
-                          경로: {task.sourceType === 'ai_summary' ? 'AI 요약 자동 추출' : '직접 등록'}
-                        </span>
+                        {task.meetingId ? (
+                          <Link
+                            href={`/meetings/${task.meetingId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/25 border border-indigo-500/20 text-indigo-300 hover:text-indigo-200 transition-colors inline-block relative group cursor-pointer"
+                            title={task.meeting ? `회의: ${task.meeting.title}` : '출처 회의 보기'}
+                          >
+                            경로: {task.sourceType === 'ai_summary' ? 'AI 요약 자동 추출 🔗' : '직접 등록 🔗'}
+                            
+                            {task.meeting && (
+                              <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-950 border border-card-border text-[9px] text-slate-300 px-2 py-1 rounded whitespace-nowrap shadow-xl z-10 pointer-events-none">
+                                {task.meeting.title}
+                              </span>
+                            )}
+                          </Link>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-white/5 border border-card-border">
+                            경로: 직접 등록
+                          </span>
+                        )}
                         {task.dueDate && (() => {
                           const dday = getDDayInfo(task.dueDate, task.status === 'completed');
                           return (

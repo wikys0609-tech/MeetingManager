@@ -3,13 +3,19 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/common/Navbar';
-import { Calendar, Plus, Trash2, ArrowLeft, ArrowRight, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { Calendar, Plus, Trash2, ArrowLeft, ArrowRight, Loader2, Sparkles, AlertCircle, Check, GripVertical, Trash } from 'lucide-react';
 
 export default function NewMeetingPage() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Draft Restore Banner
+  const [showRestoreBanner, setShowRestoreBanner] = useState(false);
+
+  // Drag and Drop State
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
 
   // Form Fields
   const [title, setTitle] = useState('');
@@ -38,6 +44,12 @@ export default function NewMeetingPage() {
         setMeetings(completed);
       })
       .catch((err) => console.error('Fetch meetings error:', err));
+
+    // Check draft
+    const savedDraft = localStorage.getItem('meeting_draft');
+    if (savedDraft) {
+      setShowRestoreBanner(true);
+    }
   }, []);
 
   // Fetch parent meeting tasks when parentMeetingId changes
@@ -61,6 +73,67 @@ export default function NewMeetingPage() {
       .finally(() => setLoading(false));
   }, [parentMeetingId]);
 
+  // Prevent Page Leaving Warnings
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const isFormDirty = title || objective || scheduledAt || location || onlineUrl || selectedParticipants.length > 0 || agendas.some(a => a.title || a.description);
+      if (isFormDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [title, objective, scheduledAt, location, onlineUrl, selectedParticipants, agendas]);
+
+  // LocalStorage AutoSave
+  useEffect(() => {
+    const isFormDirty = title || objective || scheduledAt || location || onlineUrl || selectedParticipants.length > 0 || agendas.some(a => a.title || a.description);
+    if (!isFormDirty) return;
+
+    const timer = setTimeout(() => {
+      localStorage.setItem('meeting_draft', JSON.stringify({
+        title,
+        objective,
+        scheduledAt,
+        location,
+        onlineUrl,
+        selectedParticipants,
+        agendas,
+        parentMeetingId,
+        selectedCarriedOverItems
+      }));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [title, objective, scheduledAt, location, onlineUrl, selectedParticipants, agendas, parentMeetingId, selectedCarriedOverItems]);
+
+  const handleRestoreDraft = () => {
+    const savedDraft = localStorage.getItem('meeting_draft');
+    if (savedDraft) {
+      const parsed = JSON.parse(savedDraft);
+      if (confirm('작성 중이던 임시 저장본으로 화면을 복원하시겠습니까? (기존에 작성 중이던 글은 덮어씌워집니다.)')) {
+        setTitle(parsed.title || '');
+        setObjective(parsed.objective || '');
+        setScheduledAt(parsed.scheduledAt || '');
+        setLocation(parsed.location || '');
+        setOnlineUrl(parsed.onlineUrl || '');
+        setSelectedParticipants(parsed.selectedParticipants || []);
+        setAgendas(parsed.agendas || [{ title: '', description: '', decisionRequired: false }]);
+        setParentMeetingId(parsed.parentMeetingId || '');
+        setSelectedCarriedOverItems(parsed.selectedCarriedOverItems || []);
+        setShowRestoreBanner(false);
+      }
+    }
+  };
+
+  const handleDeleteDraft = () => {
+    if (confirm('임시 저장된 초안을 삭제하시겠습니까?')) {
+      localStorage.removeItem('meeting_draft');
+      setShowRestoreBanner(false);
+    }
+  };
+
   const handleAddAgenda = () => {
     setAgendas([...agendas, { title: '', description: '', decisionRequired: false }]);
   };
@@ -80,12 +153,53 @@ export default function NewMeetingPage() {
     setAgendas(updated);
   };
 
+  // Agenda Drag Handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === index) return;
+
+    const newAgendas = [...agendas];
+    const draggedItem = newAgendas[draggedIdx];
+    newAgendas.splice(draggedIdx, 1);
+    newAgendas.splice(index, 0, draggedItem);
+    
+    setDraggedIdx(index);
+    setAgendas(newAgendas);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+  };
+
   const handleToggleParticipant = (userId: string) => {
     if (selectedParticipants.includes(userId)) {
       setSelectedParticipants(selectedParticipants.filter((id) => id !== userId));
     } else {
       setSelectedParticipants([...selectedParticipants, userId]);
     }
+  };
+
+  const handleSelectAllParticipants = () => {
+    setSelectedParticipants(users.map((u) => u.id));
+  };
+
+  const handleDeselectAllParticipants = () => {
+    setSelectedParticipants([]);
+  };
+
+  const handleCancel = () => {
+    const isFormDirty = title || objective || scheduledAt || location || onlineUrl || selectedParticipants.length > 0 || agendas.some(a => a.title || a.description);
+    if (isFormDirty) {
+      if (!confirm('작성 중인 내용이 있습니다. 정말 취소하고 돌아가시겠습니까?')) {
+        return;
+      }
+    }
+    router.back();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,6 +247,9 @@ export default function NewMeetingPage() {
 
       const newMeetingId = createData.meetingId;
 
+      // Clean draft
+      localStorage.removeItem('meeting_draft');
+
       // 2. Automatically trigger AI pre-summary generation
       const summaryRes = await fetch(`/api/meetings/${newMeetingId}/pre-summary/generate`, {
         method: 'POST'
@@ -155,10 +272,37 @@ export default function NewMeetingPage() {
       <Navbar />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-8 space-y-6">
+        {/* Restore draft banner */}
+        {showRestoreBanner && (
+          <div className="glass-panel p-4 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-xs text-indigo-300 flex items-center justify-between gap-4 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-indigo-400" />
+              <span>이전에 작성 중이던 회의록 초안이 존재합니다. 내용을 복원하시겠습니까?</span>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleRestoreDraft}
+                className="px-3 py-1.5 rounded bg-indigo-600 text-white font-bold hover:bg-indigo-500 cursor-pointer"
+              >
+                불러오기
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteDraft}
+                className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 cursor-pointer border border-card-border"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            type="button"
+            onClick={handleCancel}
             className="p-2 rounded-lg bg-white/5 border border-card-border hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
           >
             <ArrowLeft size={16} />
@@ -292,11 +436,29 @@ export default function NewMeetingPage() {
 
           {/* Section 3: 참석자 구성 */}
           <div className="glass-panel p-6 rounded-2xl border border-card-border space-y-4">
-            <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wide">
-              3. 참석자 선택
-            </h3>
+            <div className="flex items-center justify-between border-b border-card-border/50 pb-2">
+              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wide">
+                3. 참석자 선택
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllParticipants}
+                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 border border-card-border text-[10px] text-slate-300 transition-all cursor-pointer"
+                >
+                  전체 선택
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeselectAllParticipants}
+                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 border border-card-border text-[10px] text-slate-300 transition-all cursor-pointer"
+                >
+                  전체 해제
+                </button>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {users.map((user) => {
                 const isSelected = selectedParticipants.includes(user.id);
                 return (
@@ -304,13 +466,16 @@ export default function NewMeetingPage() {
                     key={user.id}
                     type="button"
                     onClick={() => handleToggleParticipant(user.id)}
-                    className={`p-3 rounded-xl border text-left text-xs transition-all flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left text-xs transition-all flex flex-col justify-between relative cursor-pointer group hover:bg-white/10 ${
                       isSelected
                         ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
-                        : 'bg-white/5 border-card-border text-slate-400 hover:border-white/10'
+                        : 'bg-white/5 border-card-border text-slate-400'
                     }`}
                   >
-                    <span className="font-bold text-slate-200">{user.name}</span>
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-bold text-slate-200">{user.name}</span>
+                      {isSelected && <Check size={12} className="text-indigo-400" />}
+                    </div>
                     <span className="text-[10px] text-slate-500 mt-1">{user.department}</span>
                   </button>
                 );
@@ -320,69 +485,87 @@ export default function NewMeetingPage() {
 
           {/* Section 4: 회의 안건 */}
           <div className="glass-panel p-6 rounded-2xl border border-card-border space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wide">
-                4. 회의 안건 설정
-              </h3>
-              <button
-                type="button"
-                onClick={handleAddAgenda}
-                className="px-2.5 py-1 rounded bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <Plus size={12} />
-                안건 추가
-              </button>
-            </div>
+            <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wide">
+              4. 회의 안건 설정
+            </h3>
 
-            <div className="space-y-4 divide-y divide-card-border/50">
+            <div className="space-y-4">
               {agendas.map((agenda, idx) => (
-                <div key={idx} className="pt-4 first:pt-0 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-400">안건 #{idx + 1}</span>
-                    {agendas.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAgenda(idx)}
-                        className="p-1 rounded hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
+                <div
+                  key={idx}
+                  draggable={agendas.length > 1}
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  className={`p-4 rounded-xl border bg-white/3 border-card-border flex gap-3 items-start transition-all ${
+                    draggedIdx === idx ? 'opacity-40 border-indigo-500 border-dashed bg-indigo-950/20' : ''
+                  }`}
+                >
+                  {/* Grip drag handle */}
+                  {agendas.length > 1 && (
+                    <div className="mt-2.5 text-slate-500 cursor-grab active:cursor-grabbing hover:text-white transition-colors">
+                      <GripVertical size={16} />
+                    </div>
+                  )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="md:col-span-2 space-y-1">
-                      <input
-                        type="text"
-                        value={agenda.title}
-                        onChange={(e) => handleAgendaChange(idx, 'title', e.target.value)}
-                        placeholder="안건 제목을 입력하세요."
-                        className="w-full px-3 py-2 rounded-lg glass-input text-xs text-white"
-                        required
-                      />
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400">안건 #{idx + 1}</span>
+                      {agendas.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAgenda(idx)}
+                          className="p-1 rounded hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
-                    <div className="flex items-center">
-                      <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-2 space-y-1">
                         <input
-                          type="checkbox"
-                          checked={agenda.decisionRequired}
-                          onChange={(e) => handleAgendaChange(idx, 'decisionRequired', e.target.checked)}
+                          type="text"
+                          value={agenda.title}
+                          onChange={(e) => handleAgendaChange(idx, 'title', e.target.value)}
+                          placeholder="안건 제목을 입력하세요."
+                          className="w-full px-3 py-2 rounded-lg glass-input text-xs text-white"
+                          required
                         />
-                        의사결정 필요 안건
-                      </label>
-                    </div>
-                    <div className="md:col-span-3">
-                      <input
-                        type="text"
-                        value={agenda.description}
-                        onChange={(e) => handleAgendaChange(idx, 'description', e.target.value)}
-                        placeholder="안건 상세 설명 (논의할 배경 및 이슈)"
-                        className="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-400"
-                      />
+                      </div>
+                      <div className="flex items-center">
+                        <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={agenda.decisionRequired}
+                            onChange={(e) => handleAgendaChange(idx, 'decisionRequired', e.target.checked)}
+                          />
+                          의사결정 필요 안건
+                        </label>
+                      </div>
+                      <div className="md:col-span-3">
+                        <input
+                          type="text"
+                          value={agenda.description}
+                          onChange={(e) => handleAgendaChange(idx, 'description', e.target.value)}
+                          placeholder="안건 상세 설명 (논의할 배경 및 이슈)"
+                          className="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-400"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
+
+              {/* Add agenda wide button */}
+              <button
+                type="button"
+                onClick={handleAddAgenda}
+                className="w-full py-4 border-2 border-dashed border-card-border hover:border-indigo-500/40 rounded-xl flex items-center justify-center gap-2 text-xs text-slate-400 hover:text-indigo-400 transition-all bg-white/2 hover:bg-indigo-600/5 cursor-pointer font-semibold"
+              >
+                <Plus size={14} />
+                안건 추가하기
+              </button>
             </div>
           </div>
 
@@ -390,7 +573,7 @@ export default function NewMeetingPage() {
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={handleCancel}
               className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-card-border text-white font-semibold text-sm transition-all cursor-pointer"
             >
               취소
