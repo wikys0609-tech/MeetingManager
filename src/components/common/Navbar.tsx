@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, CalendarRange, CheckSquare, LogOut, User, Settings } from 'lucide-react';
+import { LayoutDashboard, CalendarRange, CheckSquare, LogOut, User, Settings, BookOpen } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -53,6 +53,7 @@ export default function Navbar() {
     { name: '대시보드', href: '/dashboard', icon: LayoutDashboard },
     { name: '회의 관리', href: '/meetings', icon: CalendarRange },
     { name: '할 일 목록', href: '/tasks', icon: CheckSquare },
+    { name: '사용 가이드', href: '/guide', icon: BookOpen },
     { name: '설정', href: '/settings', icon: Settings },
   ];
 
