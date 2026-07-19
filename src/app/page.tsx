@@ -126,6 +126,7 @@ export default function LoginPage() {
             </h3>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
+                type="button"
                 onClick={() => autofillUser('requester@meetinghub.local')}
                 className="p-2 text-left rounded-lg bg-white/5 border border-card-border hover:border-indigo-500/30 text-slate-300 transition-all cursor-pointer"
               >
@@ -133,6 +134,7 @@ export default function LoginPage() {
                 <div className="text-[10px] text-slate-500">requester@meetinghub.local</div>
               </button>
               <button
+                type="button"
                 onClick={() => autofillUser('user1@meetinghub.local')}
                 className="p-2 text-left rounded-lg bg-white/5 border border-card-border hover:border-indigo-500/30 text-slate-300 transition-all cursor-pointer"
               >
@@ -140,6 +142,7 @@ export default function LoginPage() {
                 <div className="text-[10px] text-slate-500">user1@meetinghub.local</div>
               </button>
               <button
+                type="button"
                 onClick={() => autofillUser('user2@meetinghub.local')}
                 className="p-2 text-left rounded-lg bg-white/5 border border-card-border hover:border-indigo-500/30 text-slate-300 transition-all cursor-pointer"
               >
@@ -147,6 +150,7 @@ export default function LoginPage() {
                 <div className="text-[10px] text-slate-500">user2@meetinghub.local</div>
               </button>
               <button
+                type="button"
                 onClick={() => autofillUser('admin@meetinghub.local')}
                 className="p-2 text-left rounded-lg bg-white/5 border border-card-border hover:border-indigo-500/30 text-slate-300 transition-all cursor-pointer"
               >
