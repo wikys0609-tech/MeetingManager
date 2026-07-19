@@ -166,17 +166,17 @@ export default function GuidePage() {
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   <div className="p-3.5 rounded-xl bg-white/5 border border-card-border space-y-2">
-                    <span className="font-bold text-indigo-300">① AI 사전 준비 요약 검증</span>
+                    <span className="font-bold text-indigo-300">① AI 사전 준비 요약 세부 편집</span>
                     <p className="text-slate-400 leading-relaxed">
                       회의 성격과 목표를 사전에 정의하면 AI가 준비사항을 도출합니다. 
-                      개설자는 이 요약을 직접 수정한 후 최종 확정해 모든 참여자와 공유합니다.
+                      개설자는 이 요약의 회의 목적뿐만 아니라 **안건 제목, 요약문, 세부 확인 질문, 그리고 참석자별 개별 준비 사항**까지 인풋 폼 형태로 직접 편집하여 내용을 보강할 수 있습니다.
                     </p>
                   </div>
                   <div className="p-3.5 rounded-xl bg-white/5 border border-card-border space-y-2">
-                    <span className="font-bold text-indigo-300">② 회의 중 실시간 메모 & 음성 파일</span>
+                    <span className="font-bold text-indigo-300">② 회의 관련 참고 자료 업로드</span>
                     <p className="text-slate-400 leading-relaxed">
-                      회의 당일 참여자들의 메모와 녹취 파일 업로드를 결합합니다. 
-                      업로드 시 시뮬레이션 STT 처리를 통해 화자 분리 텍스트를 생성합니다.
+                      회의에 필요한 관련 자료(PDF, 설계서, 제안 PPT 등)를 **'회의 관련 참고 자료'** 패널에서 파일로 직접 업로드하고 배정할 수 있습니다. 
+                      공유된 파일은 실시간 다운로드 및 삭제 관리가 연동됩니다.
                     </p>
                   </div>
                   <div className="p-3.5 rounded-xl bg-white/5 border border-card-border space-y-2 md:col-span-2">
