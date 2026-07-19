@@ -174,9 +174,79 @@ export default function MeetingDetailPage() {
     }
   };
 
+  // Attachment upload and delete handlers
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/meetings/${id}/attachments`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '업로드 실패');
+
+      fetchMeetingDetails();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleAttachmentDelete = async (attachmentId: string) => {
+    if (!confirm('해당 관련 자료를 정말 삭제하시겠습니까?')) return;
+
+    try {
+      const res = await fetch(`/api/meetings/${id}/attachments?attachmentId=${attachmentId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        fetchMeetingDetails();
+      }
+    } catch (error) {
+      console.error('Failed to delete attachment:', error);
+    }
+  };
+
   // Inline edit pre-summary purpose
   const updatePreSummaryPurpose = (val: string) => {
     setEditablePreSummary({ ...editablePreSummary, meeting_purpose: val });
+  };
+
+  // Inline edit pre-summary agendas
+  const updatePreSummaryAgenda = (idx: number, field: string, val: any) => {
+    const updated = [...editablePreSummary.key_agendas];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setEditablePreSummary({ ...editablePreSummary, key_agendas: updated });
+  };
+
+  const updatePreSummaryAgendaQuestion = (agendaIdx: number, qIdx: number, val: string) => {
+    const updatedAgendas = [...editablePreSummary.key_agendas];
+    const updatedQuestions = [...updatedAgendas[agendaIdx].questions];
+    updatedQuestions[qIdx] = val;
+    updatedAgendas[agendaIdx] = { ...updatedAgendas[agendaIdx], questions: updatedQuestions };
+    setEditablePreSummary({ ...editablePreSummary, key_agendas: updatedAgendas });
+  };
+
+  // Inline edit pre-summary preparations
+  const updatePreSummaryPrep = (idx: number, field: string, val: any) => {
+    const updated = [...editablePreSummary.participant_preparation];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setEditablePreSummary({ ...editablePreSummary, participant_preparation: updated });
+  };
+
+  const updatePreSummaryPrepItems = (idx: number, val: string) => {
+    const updated = [...editablePreSummary.participant_preparation];
+    updated[idx] = { ...updated[idx], items: val.split(',').map(s => s.trim()) };
+    setEditablePreSummary({ ...editablePreSummary, participant_preparation: updated });
   };
 
   // Inline edit post-summary text
@@ -256,6 +326,63 @@ export default function MeetingDetailPage() {
             </div>
           </div>
 
+          {/* 관련 첨부 자료 (Attachments Panel - Phase 2) */}
+          <div className="glass-panel p-5 rounded-2xl border border-card-border space-y-4">
+            <div className="flex items-center justify-between border-b border-card-border pb-2">
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <Upload size={16} className="text-indigo-400" />
+                회의 관련 참고 자료 ({meeting.attachments?.length || 0})
+              </h3>
+              
+              <label className="px-2.5 py-1 rounded bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-300 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all">
+                <Plus size={12} />
+                자료 업로드
+                <input
+                  type="file"
+                  onChange={handleAttachmentUpload}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
+            </div>
+
+            {meeting.attachments?.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                {meeting.attachments.map((file: any) => (
+                  <div
+                    key={file.id}
+                    className="p-2.5 rounded-xl bg-white/5 border border-card-border flex items-center justify-between gap-3 hover:border-white/10 transition-all"
+                  >
+                    <a
+                      href={file.storagePath}
+                      download={file.filename}
+                      className="text-slate-300 hover:text-indigo-300 transition-colors font-semibold truncate flex-1 flex items-center gap-1.5"
+                      title={file.filename}
+                    >
+                      <span>📎</span>
+                      <span className="truncate">{file.filename}</span>
+                      <span className="text-[9px] text-slate-500 shrink-0">
+                        ({(file.sizeBytes / 1024).toFixed(1)} KB)
+                      </span>
+                    </a>
+                    
+                    <button
+                      onClick={() => handleAttachmentDelete(file.id)}
+                      className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer shrink-0"
+                      title="자료 삭제"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-slate-600 text-xs py-3">
+                업로드된 회의 관련 자료가 없습니다.
+              </div>
+            )}
+          </div>
+
           {/* 1단계: 사전요약 승인 및 확정 흐름 */}
           {meeting.status === 'pre_review' && editablePreSummary && (
             <div className="glass-panel p-6 rounded-2xl border border-indigo-500/20 space-y-6">
@@ -286,32 +413,80 @@ export default function MeetingDetailPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-white/5 border border-card-border space-y-2">
-                    <span className="font-bold text-indigo-300">핵심 안건 및 확인 질문</span>
-                    <ul className="space-y-2 pt-1">
+                  {/* Editable Agendas */}
+                  <div className="p-4 rounded-xl bg-white/5 border border-card-border space-y-3">
+                    <span className="font-bold text-indigo-300 block border-b border-card-border/50 pb-1">
+                      핵심 안건 및 확인 질문 (수정 가능)
+                    </span>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                       {editablePreSummary.key_agendas?.map((a: any, i: number) => (
-                        <li key={i} className="list-disc list-inside">
-                          <span className="font-semibold text-white">{a.title}</span> - {a.summary}
-                          {a.questions?.map((q: string, qi: number) => (
-                            <div key={qi} className="text-[10px] text-slate-500 pl-4">Q. {q}</div>
-                          ))}
-                        </li>
+                        <div key={i} className="p-3 rounded-lg bg-white/3 border border-card-border/30 space-y-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-500 font-bold">안건 #{i + 1} 제목</label>
+                            <input
+                              type="text"
+                              value={a.title}
+                              onChange={(e) => updatePreSummaryAgenda(i, 'title', e.target.value)}
+                              className="w-full px-2 py-1 rounded bg-slate-900 border border-card-border text-[11px] text-white font-semibold"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-500 font-bold">논의 내용 요약</label>
+                            <input
+                              type="text"
+                              value={a.summary}
+                              onChange={(e) => updatePreSummaryAgenda(i, 'summary', e.target.value)}
+                              className="w-full px-2 py-1 rounded bg-slate-900 border border-card-border text-[11px] text-slate-300"
+                            />
+                          </div>
+                          {a.questions && a.questions.length > 0 && (
+                            <div className="space-y-1">
+                              <label className="text-[9px] text-slate-500 font-bold">확인 질문</label>
+                              {a.questions.map((q: string, qi: number) => (
+                                <input
+                                  key={qi}
+                                  type="text"
+                                  value={q}
+                                  onChange={(e) => updatePreSummaryAgendaQuestion(i, qi, e.target.value)}
+                                  className="w-full px-2 py-1 rounded bg-slate-900/60 border border-card-border/50 text-[10px] text-slate-400 mt-1"
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-white/5 border border-card-border space-y-2">
-                    <span className="font-bold text-indigo-300">참석자 사전 준비물</span>
-                    <ul className="space-y-2 pt-1">
+                  {/* Editable Preparation Items */}
+                  <div className="p-4 rounded-xl bg-white/5 border border-card-border space-y-3">
+                    <span className="font-bold text-indigo-300 block border-b border-card-border/50 pb-1">
+                      참석자 사전 준비물 (수정 가능)
+                    </span>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                       {editablePreSummary.participant_preparation?.map((p: any, i: number) => (
-                        <li key={i} className="list-disc list-inside">
-                          <span className="font-semibold text-white">{p.participant_name}</span>:
-                          <div className="pl-4 text-[10px] text-slate-400">
-                            {p.items?.join(', ')}
+                        <div key={i} className="p-3 rounded-lg bg-white/3 border border-card-border/30 space-y-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-500 font-bold">참석자 성명</label>
+                            <input
+                              type="text"
+                              value={p.participant_name}
+                              onChange={(e) => updatePreSummaryPrep(i, 'participant_name', e.target.value)}
+                              className="w-full px-2 py-1 rounded bg-slate-900 border border-card-border text-[11px] text-white font-semibold"
+                            />
                           </div>
-                        </li>
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-500 font-bold">사전 준비사항 (쉼표로 구분)</label>
+                            <input
+                              type="text"
+                              value={p.items?.join(', ') || ''}
+                              onChange={(e) => updatePreSummaryPrepItems(i, e.target.value)}
+                              className="w-full px-2 py-1 rounded bg-slate-900 border border-card-border text-[11px] text-slate-300"
+                            />
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 </div>
               </div>
