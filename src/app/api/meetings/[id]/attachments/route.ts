@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,28 +17,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: '업로드할 파일이 없습니다.' }, { status: 400 });
     }
 
+    // Convert file to Base64 string to avoid write-only serverless filesystem constraints
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-
-    // Create public/uploads directory
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    try {
-      await mkdir(uploadDir, { recursive: true });
-    } catch (err) {
-      // directory already exists
-    }
-
-    const uniqueFilename = `${Date.now()}_${file.name}`;
-    const filePath = path.join(uploadDir, uniqueFilename);
-    await writeFile(filePath, buffer);
+    const base64String = buffer.toString('base64');
+    const mimeType = file.type || 'application/octet-stream';
+    const dataUrl = `data:${mimeType};base64,${base64String}`;
 
     const attachment = await prisma.attachment.create({
       data: {
         meetingId: id,
         uploadedBy: session.id,
         filename: file.name,
-        storagePath: `/uploads/${uniqueFilename}`,
-        mimeType: file.type,
+        storagePath: dataUrl,
+        mimeType: mimeType,
         sizeBytes: file.size,
         textExtractionStatus: 'completed',
       }
